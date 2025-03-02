@@ -3,3 +3,8 @@ flask-cors
 openai 
 gtts
 dotenv
+Flask
+python-dotenv
+transformers
+torch
+groq
