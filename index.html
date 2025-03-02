@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Chatbot</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #chatContainer {
+      max-width: 500px;
+      margin: 50px auto;
+      border: 1px solid #ccc;
+      padding: 20px;
+      border-radius: 5px;
+    }
+    #messages {
+      border: 1px solid #ddd;
+      padding: 10px;
+      height: 300px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    button { padding: 10px 15px; margin: 5px; }
+  </style>
+</head>
+<body>
+  <div id="chatContainer">
+    <h2>Voice Chatbot</h2>
+    <div id="messages"></div>
+    <button id="startBtn">Start Listening</button>
+    <button id="stopBtn" disabled>Stop Listening</button>
+  </div>
+  
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const messagesDiv = document.getElementById('messages');
+
+    // Ensure browser supports the SpeechRecognition API
+    let recognition;
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Sorry, your browser doesn't support Speech Recognition.");
+    } else {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = function() {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      };
+
+      recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        addMessage("User", transcript);
+        // Send the text to the backend for AI processing
+        fetch("http://localhost:5000/process-speech", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: transcript })
+        })
+        .then(response => response.json())
+        .then(data => {
+          const aiResponse = data.response;
+          addMessage("AI", aiResponse);
+          // Request synthesized audio for the AI response
+          fetch("http://localhost:5000/synthesize-speech", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: aiResponse })
+          })
+          .then(response => response.blob())
+          .then(blob => {
+            const audioURL = URL.createObjectURL(blob);
+            // Create an Audio element and play the response
+            const audio = new Audio(audioURL);
+            audio.play();
+          })
+          .catch(error => console.error("TTS Error:", error));
+        })
+        .catch(error => console.error("Processing Error:", error));
+      };
+
+      recognition.onerror = function(event) {
+        console.error("Speech recognition error:", event.error);
+      };
+
+      recognition.onend = function() {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      };
+    }
+
+    startBtn.addEventListener('click', () => {
+      recognition.start();
+    });
+    stopBtn.addEventListener('click', () => {
+      recognition.stop();
+    });
+
+    function addMessage(sender, text) {
+      const messageElem = document.createElement('div');
+      messageElem.innerHTML = `<strong>${sender}:</strong> ${text}`;
+      messagesDiv.appendChild(messageElem);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  </script>
+</body>
+</html>
