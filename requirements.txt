@@ -8,3 +8,5 @@ python-dotenv
 transformers
 torch
 groq
+Flask-SocketIO
+eventlet

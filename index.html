@@ -1,110 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Voice Chatbot</title>
-  <style>
-    body { font-family: Arial, sans-serif; }
-    #chatContainer {
-      max-width: 500px;
-      margin: 50px auto;
-      border: 1px solid #ccc;
-      padding: 20px;
-      border-radius: 5px;
-    }
-    #messages {
-      border: 1px solid #ddd;
-      padding: 10px;
-      height: 300px;
-      overflow-y: auto;
-      margin-bottom: 10px;
-    }
-    button { padding: 10px 15px; margin: 5px; }
-  </style>
+  <title>Real-time Voice Conversation with GPT-4o Mini</title>
+  <!-- Include the Socket.IO client library -->
+  <script src="socket.io/socket.io.js"></script>
 </head>
 <body>
-  <div id="chatContainer">
-    <h2>Voice Chatbot</h2>
-    <div id="messages"></div>
-    <button id="startBtn">Start Listening</button>
-    <button id="stopBtn" disabled>Stop Listening</button>
-  </div>
-  
+  <h1>Real-time Voice Conversation</h1>
+  <button id="startBtn">Start Speaking</button>
+  <p id="status">Click the button and speak.</p>
+  <p><strong>You:</strong> <span id="userText"></span></p>
+  <p><strong>Bot:</strong> <span id="botText"></span></p>
+
   <script>
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const messagesDiv = document.getElementById('messages');
+    // Connect to the backend Socket.IO server.
+ // Instead of:
 
-    // Ensure browser supports the SpeechRecognition API
-    let recognition;
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert("Sorry, your browser doesn't support Speech Recognition.");
-    } else {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.continuous = false;
+// Use:
+var socket = io("http://127.0.0.1:5000");
 
-      recognition.onstart = function() {
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-      };
 
-      recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        addMessage("User", transcript);
-        // Send the text to the backend for AI processing
-        fetch("http://localhost:5000/process-speech", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: transcript })
-        })
-        .then(response => response.json())
-        .then(data => {
-          const aiResponse = data.response;
-          addMessage("AI", aiResponse);
-          // Request synthesized audio for the AI response
-          fetch("http://localhost:5000/synthesize-speech", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: aiResponse })
-          })
-          .then(response => response.blob())
-          .then(blob => {
-            const audioURL = URL.createObjectURL(blob);
-            // Create an Audio element and play the response
-            const audio = new Audio(audioURL);
-            audio.play();
-          })
-          .catch(error => console.error("TTS Error:", error));
-        })
-        .catch(error => console.error("Processing Error:", error));
-      };
-
-      recognition.onerror = function(event) {
-        console.error("Speech recognition error:", event.error);
-      };
-
-      recognition.onend = function() {
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-      };
+    // Check if the browser supports SpeechRecognition.
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition. Please try Chrome or Edge.");
     }
+    var recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
-    startBtn.addEventListener('click', () => {
+    // When the user starts speaking and a result is available:
+    recognition.onresult = function(event) {
+      var transcript = event.results[0][0].transcript;
+      document.getElementById('userText').innerText = transcript;
+      // Send the transcribed text to the backend.
+      socket.emit('user_message', { message: transcript });
+    };
+
+    recognition.onerror = function(event) {
+      console.error("Speech recognition error: ", event.error);
+      document.getElementById('status').innerText = "Error: " + event.error;
+    };
+
+    // Listen for the bot's response from the backend.
+    socket.on('bot_response', function(data) {
+      var botMessage = data.message;
+      document.getElementById('botText').innerText = botMessage;
+      // Use Speech Synthesis to speak out the bot's response.
+      var utterance = new SpeechSynthesisUtterance(botMessage);
+      speechSynthesis.speak(utterance);
+    });
+
+    // Start the speech recognition when the button is clicked.
+    document.getElementById('startBtn').addEventListener('click', function() {
       recognition.start();
+      document.getElementById('status').innerText = "Listening...";
     });
-    stopBtn.addEventListener('click', () => {
-      recognition.stop();
-    });
-
-    function addMessage(sender, text) {
-      const messageElem = document.createElement('div');
-      messageElem.innerHTML = `<strong>${sender}:</strong> ${text}`;
-      messagesDiv.appendChild(messageElem);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
   </script>
 </body>
 </html>
